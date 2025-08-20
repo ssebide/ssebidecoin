@@ -175,6 +175,12 @@ impl Blockchain {
             }
             known_inputs.insert(input.prev_transaction_output_hash);
         }
+
+        // check if any of the utxos have the bool mark set to true
+        // and if so, find the transaction that references them
+        // in mempool, remove it, and set all the utxos it references
+        // to false
+
         // all inputs must be lower than all outputs
         let all_inputs = transaction
             .inputs
