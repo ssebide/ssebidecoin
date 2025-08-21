@@ -15,7 +15,7 @@ pub struct Blockchain {
     target: U256,
     utxos: HashMap<Hash, (bool, TransactionOutput)>,
     #[serde(default, skip_serializing)]
-    mempool: Vec<Transaction>,
+    mempool: Vec<(DateTime<Utc>, Transaction)>,
 }
 
 impl Blockchain {
@@ -42,7 +42,7 @@ impl Blockchain {
     }
 
     //mempool
-    pub fn mempool(&self) -> &[Transaction] {
+    pub fn mempool(&self) -> &[(DateTime<Utc>, Transaction)] {
         &self.mempool
     }
 
@@ -168,19 +168,58 @@ impl Blockchain {
         let mut known_inputs = HashSet::new();
         for input in &transaction.inputs {
             if !self.utxos.contains_key(&input.prev_transaction_output_hash) {
+                println!("UTXO not found");
+                dbg!(&self.utxos);
                 return Err(SbdError::InvalidTransaction);
             }
             if known_inputs.contains(&input.prev_transaction_output_hash) {
+                println!("duplicate input");
                 return Err(SbdError::InvalidTransaction);
             }
             known_inputs.insert(input.prev_transaction_output_hash);
         }
-
         // check if any of the utxos have the bool mark set to true
         // and if so, find the transaction that references them
         // in mempool, remove it, and set all the utxos it references
         // to false
+        for input in &transaction.inputs {
+            if let Some((true, _)) = self.utxos.get(&input.prev_transaction_output_hash) {
+                // find the transaction that references the UTXO
+                // we are trying to reference
 
+                let referencing_transaction =
+                    self.mempool
+                        .iter()
+                        .enumerate()
+                        .find(|(_, (_, transaction))| {
+                            transaction
+                                .outputs
+                                .iter()
+                                .any(|output| output.hash() == input.prev_transaction_output_hash)
+                        });
+                // If we have found one, unmark all of its UTXOs
+                if let Some((idx, (_, referencing_transaction))) = referencing_transaction {
+                    for input in &referencing_transaction.inputs {
+                        // set all utxos from this transaction to false
+                        self.utxos
+                            .entry(input.prev_transaction_output_hash)
+                            .and_modify(|(marked, _)| {
+                                *marked = false;
+                            });
+                    }
+                    // remove the transaction from the mempool
+                    self.mempool.remove(idx);
+                } else {
+                    // if, somehow, there is no matching transaction,
+                    // set this utxo to false
+                    self.utxos
+                        .entry(input.prev_transaction_output_hash)
+                        .and_modify(|(marked, _)| {
+                            *marked = false;
+                        });
+                }
+            }
+        }
         // all inputs must be lower than all outputs
         let all_inputs = transaction
             .inputs
@@ -195,11 +234,21 @@ impl Blockchain {
             .sum::<u64>();
         let all_outputs = transaction.outputs.iter().map(|output| output.value).sum();
         if all_inputs < all_outputs {
+            print!("inputs are lower than outputs");
             return Err(SbdError::InvalidTransaction);
         }
-        self.mempool.push(transaction);
+        // Mark the UTXOs as used
+        for input in &transaction.inputs {
+            self.utxos
+                .entry(input.prev_transaction_output_hash)
+                .and_modify(|(marked, _)| {
+                    *marked = true;
+                });
+        }
+        // push the transaction to the mempool
+        self.mempool.push((Utc::now(), transaction));
         // sort by miner fee
-        self.mempool.sort_by_key(|transaction| {
+        self.mempool.sort_by_key(|(_, transaction)| {
             let all_inputs = transaction
                 .inputs
                 .iter()
@@ -212,7 +261,6 @@ impl Blockchain {
                 })
                 .sum::<u64>();
             let all_outputs: u64 = transaction.outputs.iter().map(|output| output.value).sum();
-
             let miner_fee = all_inputs - all_outputs;
             miner_fee
         });
