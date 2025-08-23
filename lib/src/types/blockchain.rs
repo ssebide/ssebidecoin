@@ -3,10 +3,12 @@ use crate::U256;
 use crate::error::{Result, SbdError};
 use crate::sha256::Hash;
 use crate::utils::MerkleRoot;
+use crate::utils::Saveable;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Result as IoResult, Write};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Blockchain {
     blocks: Vec<Block>,
@@ -293,5 +295,17 @@ impl Blockchain {
                 *marked = false;
             });
         }
+    }
+}
+
+// save and load expecting CBOR from ciborium as format
+impl Saveable for Blockchain {
+    fn load<I: Read>(reader: I) -> IoResult<Self> {
+        ciborium::de::from_reader(reader)
+            .map_err(|_| IoError::new(IoErrorKind::InvalidData, "Failed to deserialize Blockchain"))
+    }
+    fn save<O: Write>(&self, writer: O) -> IoResult<()> {
+        ciborium::ser::into_writer(self, writer)
+            .map_err(|_| IoError::new(IoErrorKind::InvalidData, "Failed to serialize Blockchain"))
     }
 }
