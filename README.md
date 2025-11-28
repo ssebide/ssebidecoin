@@ -64,8 +64,80 @@ cargo run -p wallet -- balance --address <YOUR_ADDRESS>
 ### Mining
 Start mining to earn rewards:
 ```bash
-cargo run -p miner --address <YOUR_REWARD_ADDRESS>
+cargo run -p miner -- --address 127.0.0.1:9000 --public-key-file wallet_a.pub.pem
 ```
+
+### 🐳 Docker Support
+
+You can also run Ssebidecoin using Docker:
+
+```bash
+# Build the image
+docker build -t ssebidecoin .
+
+# Run a node
+docker run -d -p 9000:9000 -v ssebidecoin-data:/data ssebidecoin
+
+# Run the wallet
+docker run -it --rm --entrypoint wallet ssebidecoin --help
+```
+
+## 🧪 Testing
+
+### Quick Start Test
+
+Follow these steps to test the complete blockchain functionality:
+
+#### 1. Start the Node
+```bash
+cargo run -p node
+```
+
+#### 2. Generate Wallet Keys (if needed)
+```bash
+cargo run -p lib --example keygen
+```
+
+This creates wallet key pairs and configuration files.
+
+#### 3. Mine Initial Blocks
+```bash
+cargo run -p miner -- --address 127.0.0.1:9000 --public-key-file wallet_a.pub.pem
+```
+
+Let it mine 3-5 blocks (each generates 50 BTC reward), then press `Ctrl+C`.
+
+#### 4. Check Wallet Balance
+```bash
+cargo run -p wallet -- -c wallet_a_config.toml balance
+```
+
+Expected output: `💰 Balance: 150000000000 satoshis (1500 BTC)`
+
+#### 5. Send Transaction
+```bash
+cargo run -p wallet -- -c wallet_a_config.toml send --recipient WalletB --amount 1000
+```
+
+#### 6. Mine Block to Confirm
+```bash
+cargo run -p miner -- --address 127.0.0.1:9000 --public-key-file wallet_a.pub.pem
+```
+
+Wait for one block, then press `Ctrl+C`.
+
+#### 7. Verify Transaction
+```bash
+cargo run -p wallet -- -c wallet_b_config.toml balance
+```
+
+Expected output: `💰 Balance: 1000 satoshis (0.00001 BTC)`
+
+✅ **Success!** The transaction was confirmed on the blockchain.
+
+### Full Testing Guide
+
+For comprehensive testing instructions, troubleshooting, and advanced scenarios, see [TESTING.md](TESTING.md).
 
 ## 🤝 Contributing
 

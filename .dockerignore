@@ -1,0 +1,11 @@
+target/
+**/*.rs.bk
+Cargo.lock
+.git/
+.gitignore
+.env
+*.md
+assets/
+wallet_*.toml
+*.pem
+*.cbor

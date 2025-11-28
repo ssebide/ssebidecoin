@@ -39,31 +39,34 @@ cargo build --release --target x86_64-apple-darwin
     -   Upload the compiled binaries (zip them for easier downloading, e.g., `ssebidecoin-v0.1.0-windows.zip`).
     -   Publish the release.
 
-## 3. Docker (Optional but Recommended)
+## 3. Docker Distribution
 
-Containerization makes it easy for users to run a node without worrying about dependencies.
+The project now includes a production-ready `Dockerfile` for easy distribution.
 
-1.  **Create a `Dockerfile`**:
-    ```dockerfile
-    FROM rust:latest as builder
-    WORKDIR /usr/src/ssebidecoin
-    COPY . .
-    RUN cargo install --path node
-
-    FROM debian:buster-slim
-    COPY --from=builder /usr/local/cargo/bin/node /usr/local/bin/node
-    CMD ["node"]
+1.  **Build the Image**:
+    ```bash
+    docker build -t ssebidecoin .
     ```
 
-2.  **Build and Push**:
+2.  **Run the Node**:
     ```bash
-    docker build -t yourusername/ssebidecoin-node:latest .
-    docker push yourusername/ssebidecoin-node:latest
+    docker run -d -p 9000:9000 --name ssebidecoin-node -v ssebidecoin-data:/data ssebidecoin
     ```
 
-3.  **Usage**:
+3.  **Run the Wallet**:
     ```bash
-    docker run -d --name ssebidecoin-node yourusername/ssebidecoin-node:latest
+    docker run -it --rm --entrypoint wallet ssebidecoin --help
+    ```
+
+4.  **Run the Miner**:
+    ```bash
+    docker run -d --name ssebidecoin-miner --entrypoint miner ssebidecoin --address <YOUR_ADDRESS>
+    ```
+
+5.  **Push to Registry**:
+    ```bash
+    docker tag ssebidecoin yourusername/ssebidecoin:latest
+    docker push yourusername/ssebidecoin:latest
     ```
 
 ## 4. Public Nodes
