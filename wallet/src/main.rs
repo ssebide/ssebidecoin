@@ -34,91 +34,15 @@ enum Commands {
 = PathBuf::from("wallet_config.toml"))]
         output: PathBuf,
     },
+    Send {
+        #[arg(short, long)]
+        recipient: String,
+        #[arg(short, long)]
+        amount: u64,
+    },
+    Balance,
 }
-async fn update_utxos(core: Arc<Core>) {
-    let mut interval = time::interval(Duration::from_secs(20));
-    loop {
-        interval.tick().await;
-        if let Err(e) = core.fetch_utxos().await {
-            eprintln!("Failed to update UTXOs: {}", e);
-        }
-    }
-}
-async fn handle_transactions(rx: kanal::AsyncReceiver<Transaction>, core: Arc<Core>) {
-    while let Ok(transaction) = rx.recv().await {
-        if let Err(e) = core.send_transaction(transaction).await {
-            eprintln!("Failed to send transaction: {}", e);
-        }
-    }
-}
-async fn run_cli(core: Arc<Core>) -> Result<()> {
-    loop {
-        print!("> ");
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let parts: Vec<&str> = input.trim().split_whitespace().collect();
-        if parts.is_empty() {
-            continue;
-        }
-        match parts[0] {
-            "balance" => {
-                println!("Current balance: {} satoshis", core.get_balance());
-            }
-            "send" => {
-                if parts.len() != 3 {
-                    println!("Usage: send <recipient> <amount>");
-                    continue;
-                }
-                let recipient = parts[1];
-                let amount: u64 = parts[2].parse()?;
-                let recipient_key = core
-                    .config
-                    .contacts
-                    .iter()
-                    .find(|r| r.name == recipient)
-                    .ok_or_else(|| anyhow::anyhow!("Recipient not found"))?
-                    .load()?
-                    .key;
-                if let Err(e) = core.fetch_utxos().await {
-                    println!("failed to fetch utxos: {e}");
-                };
-                let transaction = core.create_transaction(&recipient_key, amount).await?;
-                core.tx_sender.send(transaction).await?;
-                println!("Transaction sent successfully");
-                core.fetch_utxos().await?;
-            }
-            "exit" => break,
-            _ => println!("Unknown command"),
-        }
-    }
-    Ok(())
-}
-fn generate_dummy_config(path: &PathBuf) -> Result<()> {
-    let dummy_config = Config {
-        my_keys: vec![],
-        contacts: vec![
-            Recipient {
-                name: "Alice".to_string(),
-                key: PathBuf::from("alice.pub.pem"),
-            },
-            Recipient {
-                name: "Bob".to_string(),
-                key: PathBuf::from("bob.pub.pem"),
-            },
-        ],
-        default_node: "127.0.0.1:9000".to_string(),
-        fee_config: FeeConfig {
-            fee_type: FeeType::Percent,
 
-            value: 0.1,
-        },
-    };
-    let config_str = toml::to_string_pretty(&dummy_config)?;
-    std::fs::write(path, config_str)?;
-    println!("Dummy config generated at: {}", path.display());
-    Ok(())
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -130,6 +54,52 @@ async fn main() -> Result<()> {
         Some(Commands::GenerateConfig { output }) => {
             debug!("Generating dummy config at: {:?}", output);
             return generate_dummy_config(output);
+        }
+        Some(Commands::Send { recipient, amount }) => {
+            info!("Loading config from: {:?}", cli.config);
+            let core = Core::load(cli.config.clone()).await?;
+            
+            println!("Fetching UTXOs...");
+            core.fetch_utxos().await?;
+            
+            let balance = core.get_balance();
+            println!("Current balance: {} satoshis ({} BTC)", balance, balance as f64 / 100_000_000.0);
+            
+            println!("Sending {} satoshis to {}...", amount, recipient);
+            let recipient_key = core
+                .config
+                .contacts
+                .iter()
+                .find(|r| &r.name == recipient)
+                .ok_or_else(|| anyhow::anyhow!("Recipient '{}' not found in contacts", recipient))?
+                .load()?
+                .key;
+            
+            let transaction = core.create_transaction(&recipient_key, *amount)?;
+            core.send_transaction(transaction).await?;
+            
+            println!("✓ Transaction sent successfully!");
+            println!("Remember to mine a new block to confirm the transaction.");
+            return Ok(());
+        }
+        Some(Commands::Balance) => {
+            info!("Loading config from: {:?}", cli.config);
+            let core = Core::load(cli.config.clone()).await?;
+            
+            println!("Fetching UTXOs from node...");
+            match core.fetch_utxos().await {
+                Ok(_) => println!("✓ UTXOs fetched successfully"),
+                Err(e) => {
+                    println!("✗ Failed to fetch UTXOs: {}", e);
+                    println!("Make sure the node is running at {}", core.config.default_node);
+                    return Err(e);
+                }
+            }
+            
+            let balance = core.get_balance();
+            println!("\n💰 Balance: {} satoshis", balance);
+            println!("   ({} BTC)", balance as f64 / 100_000_000.0);
+            return Ok(());
         }
         None => (),
     }
@@ -146,12 +116,12 @@ async fn main() -> Result<()> {
     info!("Starting background tasks");
     let balance_content = TextContent::new(big_mode_btc(&core));
     tokio::select! {
-    _ = ui_task(core.clone(), balance_content.clone()).await =>
+    _ = ui_task(core.clone(), balance_content.clone()) =>
     (),
-    _ = update_utxos(core.clone()).await => (),
+    _ = update_utxos(core.clone()) => (),
     _ = handle_transactions(tx_receiver.clone_async(), core.
-    clone()).await => (),
-    _ = update_balance(core.clone(), balance_content).await =>
+    clone()) => (),
+    _ = update_balance(core.clone(), balance_content) =>
     (),
     }
     info!("Application shutting down");

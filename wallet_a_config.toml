@@ -1,0 +1,13 @@
+default_node = "127.0.0.1:9000"
+
+[[my_keys]]
+public = "wallet_a.pub.pem"
+private = "wallet_a.priv.cbor"
+
+[[contacts]]
+name = "WalletB"
+key = "wallet_b.pub.pem"
+
+[fee_config]
+fee_type = "Percent"
+value = 0.1

@@ -1,10 +1,10 @@
 use anyhow::Result;
 use crossbeam_skiplist::SkipMap;
 use kanal::Sender;
-use lib::crypto::{PrivateKey, PublicKey};
+use lib::crypto::{PrivateKey, PublicKey, Signature};
 use lib::network::Message;
-use lib::types::{Transaction, TransactionOutput};
-use lib::util::Saveable;
+use lib::types::{Transaction, TransactionInput, TransactionOutput};
+use lib::utils::Saveable;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -199,9 +199,9 @@ impl Core {
                 if input_sum >= total_amount {
                     break;
                 }
-                inputs.push(btclib::types::TransactionInput {
+                inputs.push(TransactionInput {
                     prev_transaction_output_hash: utxo.hash(),
-                    signature: btclib::crypto::Signature::sign_output(
+                    signature: Signature::sign_output(
                         &utxo.hash(),
                         &self
                             .utxos
