@@ -59,7 +59,7 @@ impl Blockchain {
                 }
                 for output in transaction.outputs.iter() {
                     self.utxos
-                        .insert(transaction.hash(), (false, output.clone()));
+                        .insert(output.hash(), (false, output.clone()));
                 }
             }
         }
@@ -72,37 +72,40 @@ impl Blockchain {
             if block.header.prev_block_hash != Hash::zero() {
                 println!("zero hash");
                 return Err(SbdError::InvalidBlock);
-            } else {
-                //if this is not the first block, check if the prev_block_hash is the hash of the last block
-                let last_block = self.blocks.last().unwrap();
-
-                if block.header.prev_block_hash != last_block.hash() {
-                    println!("prev hash is wrong");
-                    return Err(SbdError::InvalidBlock);
-                }
-
-                //check if the block's hash is less than the target
-                if !block.header.hash().matches_target(block.header.target) {
-                    println!("does not match target");
-                    return Err(SbdError::InvalidBlock);
-                }
-
-                // check if the block's merkle root is correct
-                let calculated_merkle_root = MerkleRoot::calculate(&block.transactions);
-                if calculated_merkle_root != block.header.merkle_root {
-                    println!("invalid merkle root");
-                    return Err(SbdError::InvalidMerkleRoot);
-                }
-
-                // check if the block's timestamp is after the
-                // last block's timestamp
-                if block.header.timestamp <= last_block.header.timestamp {
-                    return Err(SbdError::InvalidBlock);
-                }
-
-                // Verify all transactions in the block
-                block.verify_transactions(self.block_height(), &self.utxos)?;
             }
+            
+            // Verify all transactions in the block
+            block.verify_transactions(self.block_height(), &self.utxos)?;
+        } else {
+            //if this is not the first block, check if the prev_block_hash is the hash of the last block
+            let last_block = self.blocks.last().unwrap();
+
+            if block.header.prev_block_hash != last_block.hash() {
+                println!("prev hash is wrong");
+                return Err(SbdError::InvalidBlock);
+            }
+
+            //check if the block's hash is less than the target
+            if !block.header.hash().matches_target(block.header.target) {
+                println!("does not match target");
+                return Err(SbdError::InvalidBlock);
+            }
+
+            // check if the block's merkle root is correct
+            let calculated_merkle_root = MerkleRoot::calculate(&block.transactions);
+            if calculated_merkle_root != block.header.merkle_root {
+                println!("invalid merkle root");
+                return Err(SbdError::InvalidMerkleRoot);
+            }
+
+            // check if the block's timestamp is after the
+            // last block's timestamp
+            if block.header.timestamp <= last_block.header.timestamp {
+                return Err(SbdError::InvalidBlock);
+            }
+
+            // Verify all transactions in the block
+            block.verify_transactions(self.block_height(), &self.utxos)?;
         }
 
         //Remove transactions from mempool that are now in blocks

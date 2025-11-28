@@ -119,6 +119,11 @@ pub async fn save(name: String) {
         interval.tick().await;
         println!("saving blockchain to drive...");
         let blockchain = crate::BLOCKCHAIN.read().await;
-        blockchain.save_to_file(name.clone()).unwrap();
+        println!("Blocks to save: {}", blockchain.blocks().count());
+        if let Err(e) = blockchain.save_to_file(name.clone()) {
+            eprintln!("Failed to save blockchain: {}", e);
+        } else {
+            println!("Blockchain saved successfully");
+        }
     }
 }

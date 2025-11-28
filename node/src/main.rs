@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use argh::FromArgs;
 use dashmap::DashMap;
-use lib::network::Message;
 use lib::types::Blockchain;
 use static_init::dynamic;
 use std::path::Path;
@@ -43,8 +42,6 @@ async fn main() -> Result<()> {
 
     // Start a task to periodically clean up the mempool
     tokio::spawn(util::cleanup());
-    // Start a task to periodically save the blockchain
-    tokio::spawn(util::save(blockchain_file.clone()));
 
     // Check if the blockchain_file exists
     if Path::new(&blockchain_file).exists() {
@@ -81,6 +78,9 @@ async fn main() -> Result<()> {
             }
         }
     }
+
+    // Start a task to periodically save the blockchain (after loading/initializing)
+    tokio::spawn(util::save(blockchain_file.clone()));
 
     // Start the TCP server
     let addr = format!("0.0.0.0:{}", port);
